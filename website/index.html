@@ -434,7 +434,7 @@
         $("email-list").innerHTML = emails.map((email) => `
           <button class="email-item ${email.read ? "" : "unread"} ${email.id === state.currentEmailId ? "active" : ""}" onclick="openEmail('${email.id}')">
             <span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span>
-            <span><span class="email-row"><span class="sender">${escapeHtml(email.from)}</span><span class="email-date">${formatRelative(email.date)}</span></span><span class="subject">${escapeHtml(decodeMimeHeader(email.subject) || "(Không có tiêu đề)")}</span><span class="preview">${escapeHtml(email.preview || "")}</span></span>
+            <span><span class="email-row"><span class="sender">${escapeHtml(email.from)}</span><span class="email-date">${formatRelative(email.date)}</span></span><span class="subject">${escapeHtml(decodeMimeHeader(email.subject) || "(Không có tiêu đề)")}</span></span>
           </button>`).join("");
       }
       icons();
@@ -495,7 +495,9 @@
         .replace(/<\s*script\b[^>]*>[\s\S]*?(?:<\s*\/\s*script\s*>|$)/gi, "")
         .replace(/<\s*script\b[^>]*\/?>/gi, "");
       const doc = new DOMParser().parseFromString(source, "text/html");
-      doc.querySelectorAll("script, iframe, object, embed, form, input, button, textarea, select, link, meta, base").forEach((element) => element.remove());
+      // Do not keep email-supplied style/SVG documents. Besides avoiding active
+      // content, this prevents a sender stylesheet from hiding the whole email.
+      doc.querySelectorAll("script, style, svg, math, template, noscript, iframe, object, embed, form, input, button, textarea, select, link, meta, base").forEach((element) => element.remove());
 
       doc.querySelectorAll("*").forEach((element) => {
         for (const attribute of Array.from(element.attributes)) {
@@ -522,11 +524,10 @@
         }
       });
 
-      const styles = Array.from(doc.querySelectorAll("style"), (style) => style.outerHTML).join("");
       const safeBody = doc.body.innerHTML
         .replace(/<\s*script\b[^>]*>[\s\S]*?(?:<\s*\/\s*script\s*>|$)/gi, "")
         .replace(/<\s*script\b[^>]*\/?>/gi, "");
-      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src data:"><base target="_blank">${styles}<style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box;overflow:auto}img{max-width:100%;height:auto}</style></head><body>${safeBody}</body></html>`;
+      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src data:"><base target="_blank"><style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box;overflow:auto}img{max-width:100%;height:auto}</style></head><body>${safeBody}</body></html>`;
     }
 
     async function createCustomMailbox() {
