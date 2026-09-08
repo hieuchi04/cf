@@ -126,6 +126,11 @@
     .message-from { font-weight: 700; overflow-wrap: anywhere; }
     .message-to { color: var(--muted); margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
     .message-body { min-height: 0; padding: 22px; color: #d0d5e3; line-height: 1.65; white-space: pre-wrap; overflow: auto; overflow-wrap: anywhere; flex: 1; }
+    .message-tabs { display: flex; gap: 6px; margin-top: 16px; }
+    .message-tab { appearance: none; border: 1px solid transparent; border-radius: 6px; padding: 7px 11px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+    .message-tab:hover { color: var(--text); background: var(--surface-2); }
+    .message-tab.active { background: rgba(130,84,246,.16); border-color: rgba(130,84,246,.35); color: #c8b7ff; }
+    .message-tab:disabled { cursor: not-allowed; opacity: .45; }
     .message-content { min-height: 0; flex: 1; overflow: hidden; background: white; }
     .message-frame { display: block; width: 100%; height: 100%; min-height: 0; border: 0; background: white; color-scheme: light; }
 
@@ -305,7 +310,7 @@
       workerUrl: localStorage.getItem("hnt_worker_url") || "",
       secret: localStorage.getItem("hnt_admin_secret") || "",
       domains: [], mailboxes: [], emails: [], currentMailbox: "", currentEmailId: "",
-      filter: "all", autoRefresh: true, timer: null, newApiKey: ""
+      filter: "all", autoRefresh: true, timer: null, newApiKey: "", viewerMode: "html"
     };
 
     const $ = (id) => document.getElementById(id);
@@ -439,6 +444,7 @@
       try {
         const email = await api(`/emails/${id}`);
         state.currentEmailId = id;
+        state.viewerMode = email.html ? "html" : "text";
         const summary = state.emails.find((item) => item.id === id);
         if (summary) summary.read = true;
         renderEmails(); renderViewer(email);
@@ -449,8 +455,10 @@
       if (!email) {
         $("viewer").innerHTML = `<div class="viewer-empty empty"><div><span class="empty-icon"><i data-lucide="mail-open"></i></span><strong>Chọn một email</strong><span>Nội dung thư sẽ hiển thị tại đây</span></div></div>`;
       } else {
-        $("viewer").innerHTML = `<div class="message-head"><h2>${escapeHtml(decodeMimeHeader(email.subject) || "(Không có tiêu đề)")}</h2><div class="message-meta"><span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span><div><div class="message-from">${escapeHtml(email.from)}</div><div class="message-to">Đến ${escapeHtml(email.to)}</div></div><button class="btn btn-icon btn-danger" onclick="deleteEmail('${email.id}')" title="Xóa email"><i data-lucide="trash-2"></i></button></div></div><div id="message-content"></div>`;
-        if (email.html) {
+        const htmlAvailable = Boolean(email.html);
+        if (!htmlAvailable) state.viewerMode = "text";
+        $("viewer").innerHTML = `<div class="message-head"><h2>${escapeHtml(decodeMimeHeader(email.subject) || "(Không có tiêu đề)")}</h2><div class="message-meta"><span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span><div><div class="message-from">${escapeHtml(email.from)}</div><div class="message-to">Đến ${escapeHtml(email.to)}</div></div><button class="btn btn-icon btn-danger" onclick="deleteEmail('${email.id}')" title="Xóa email"><i data-lucide="trash-2"></i></button></div><div class="message-tabs" role="tablist" aria-label="Chế độ xem email"><button class="message-tab ${state.viewerMode === "html" ? "active" : ""}" ${htmlAvailable ? "" : "disabled"} onclick="setViewerMode('html')">&lt;/&gt; HTML</button><button class="message-tab ${state.viewerMode === "text" ? "active" : ""}" onclick="setViewerMode('text')">≡ Văn bản thuần</button></div></div><div id="message-content"></div>`;
+        if (state.viewerMode === "html" && htmlAvailable) {
           const frame = document.createElement("iframe");
           frame.className = "message-frame";
           frame.title = "Nội dung HTML của email";
@@ -461,10 +469,23 @@
           $("message-content").appendChild(frame);
         } else {
           $("message-content").className = "message-body";
-          $("message-content").textContent = email.body || "(Email không có nội dung văn bản)";
+          $("message-content").textContent = getPlainEmailText(email) || "(Email không có nội dung văn bản)";
         }
       }
       icons();
+    }
+
+    function setViewerMode(mode) {
+      if (!state.currentEmailId || !["html", "text"].includes(mode)) return;
+      state.viewerMode = mode;
+      api(`/emails/${state.currentEmailId}`).then(renderViewer).catch((error) => toast(error.message, true));
+    }
+
+    function getPlainEmailText(email) {
+      if (email.body && String(email.body).trim()) return String(email.body).trim();
+      const doc = new DOMParser().parseFromString(String(email.html || ""), "text/html");
+      doc.querySelectorAll("script, style, noscript").forEach((element) => element.remove());
+      return (doc.body.textContent || "").replace(/\n[ \t]*\n[ \t\n]*/g, "\n\n").trim();
     }
 
     function buildSafeEmailHtml(html) {
