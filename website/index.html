@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>HNT Mail - Temp Mail Manager</title>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --bg: #08090d;
+      --surface: #101119;
+      --surface-2: #151722;
+      --surface-3: #1b1e2c;
+      --border: #292c3c;
+      --text: #f3f5fb;
+      --muted: #8e93a8;
+      --purple: #8254f6;
+      --cyan: #22d3ee;
+      --green: #31d6a1;
+      --red: #fb7185;
+      --amber: #fbbf24;
+      --radius: 7px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+      background-image: linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+    .hidden { display: none !important; }
+
+    .topbar {
+      height: 58px; border-bottom: 1px solid var(--border); background: rgba(8,9,13,.94);
+      display: flex; align-items: center; position: sticky; top: 0; z-index: 30;
+    }
+    .topbar-inner { width: min(1440px, 100%); margin: 0 auto; padding: 0 22px; display: flex; align-items: center; gap: 28px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; white-space: nowrap; }
+    .brand-mark { width: 31px; height: 31px; border-radius: 7px; display: grid; place-items: center; background: linear-gradient(135deg, #8254f6, #06b6d4); }
+    .brand-mark svg { width: 17px; }
+    .brand span:last-child { color: var(--cyan); }
+    .nav { display: flex; align-items: center; gap: 4px; }
+    .nav-btn { border: 0; background: transparent; color: var(--muted); padding: 8px 11px; border-radius: 6px; cursor: pointer; display: flex; gap: 7px; align-items: center; }
+    .nav-btn:hover, .nav-btn.active { color: var(--text); background: var(--surface-3); }
+    .nav-btn svg { width: 16px; }
+    .top-actions { margin-left: auto; display: flex; gap: 8px; }
+
+    .btn { height: 36px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; padding: 0 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 650; white-space: nowrap; }
+    .btn:hover { background: var(--surface-3); border-color: #3b3f55; }
+    .btn svg { width: 15px; height: 15px; }
+    .btn-primary { background: var(--purple); border-color: var(--purple); color: white; }
+    .btn-primary:hover { background: #7042e7; border-color: #7042e7; }
+    .btn-cyan { color: var(--cyan); border-color: rgba(34,211,238,.35); background: rgba(34,211,238,.07); }
+    .btn-danger { color: var(--red); border-color: rgba(251,113,133,.3); background: rgba(251,113,133,.06); }
+    .btn-icon { width: 36px; padding: 0; }
+    .btn-wide { width: 100%; }
+
+    main { width: min(1440px, 100%); margin: 0 auto; padding: 20px 22px 28px; }
+    .current-bar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; align-items: center; gap: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px rgba(49,214,161,.5); flex: 0 0 auto; }
+    .current-address { min-width: 0; flex: 1; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; font: 700 14px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .current-actions { display: flex; gap: 8px; }
+    .notice { margin-top: 12px; min-height: 40px; padding: 0 13px; border: 1px solid rgba(49,214,161,.3); background: rgba(49,214,161,.055); color: var(--green); border-radius: var(--radius); display: flex; align-items: center; gap: 9px; font-size: 13px; }
+    .notice svg { width: 16px; }
+    .notice .switch { margin-left: auto; }
+    .switch { width: 34px; height: 19px; border: 0; border-radius: 10px; padding: 2px; cursor: pointer; background: #424658; }
+    .switch::after { content: ""; display: block; width: 15px; height: 15px; border-radius: 50%; background: white; transition: transform .18s; }
+    .switch.on { background: var(--green); }
+    .switch.on::after { transform: translateX(15px); }
+
+    .workspace { margin-top: 14px; min-height: 650px; display: grid; grid-template-columns: 245px 330px minmax(330px, 1fr) 285px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+    .pane { min-width: 0; background: var(--surface); }
+    .pane + .pane { border-left: 1px solid var(--border); }
+    .pane-head { height: 57px; padding: 0 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; }
+    .pane-title { font-weight: 750; }
+    .badge { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-grid; place-items: center; background: var(--surface-3); color: var(--muted); font-size: 11px; }
+    .spacer { margin-left: auto; }
+    .search { margin: 11px; position: relative; }
+    .search svg { position: absolute; width: 15px; left: 10px; top: 10px; color: var(--muted); }
+    .field, .search input, select { width: 100%; height: 38px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 6px; padding: 0 11px; }
+    .search input { padding-left: 32px; }
+    input::placeholder { color: #686d82; }
+    select { appearance: auto; }
+
+    .mailbox-list, .email-list { overflow-y: auto; height: 532px; scrollbar-width: thin; scrollbar-color: #34384a transparent; }
+    .mailbox-item { width: 100%; border: 0; border-bottom: 1px solid rgba(41,44,60,.75); background: transparent; text-align: left; padding: 12px 13px; cursor: pointer; display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 10px; }
+    .mailbox-item:hover { background: rgba(255,255,255,.025); }
+    .mailbox-item.active { background: rgba(130,84,246,.11); box-shadow: inset 2px 0 var(--purple); }
+    .mailbox-avatar { width: 32px; height: 32px; border-radius: 6px; background: var(--surface-3); display: grid; place-items: center; color: var(--cyan); }
+    .mailbox-avatar svg { width: 16px; }
+    .mailbox-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .mailbox-time { color: var(--muted); font-size: 11px; margin-top: 5px; }
+    .count { min-width: 20px; height: 20px; border-radius: 10px; background: rgba(130,84,246,.18); color: #bfaaff; display: grid; place-items: center; font-size: 11px; }
+
+    .email-tools { padding: 10px 11px; border-bottom: 1px solid var(--border); }
+    .filters { display: flex; gap: 4px; margin-top: 8px; }
+    .filter { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 6px 9px; cursor: pointer; font-size: 12px; }
+    .filter.active { background: rgba(130,84,246,.16); color: #c8b7ff; }
+    .email-list { height: 481px; }
+    .email-item { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: inherit; text-align: left; padding: 14px 15px; cursor: pointer; display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 10px; }
+    .email-item:hover, .email-item.active { background: rgba(255,255,255,.025); }
+    .email-item.unread { box-shadow: inset 2px 0 var(--cyan); }
+    .sender-avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #1f65df; color: white; font-weight: 800; }
+    .email-row { display: flex; gap: 8px; align-items: baseline; }
+    .sender { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: #dfe4f4; }
+    .email-date { margin-left: auto; flex: 0 0 auto; color: var(--muted); font-size: 11px; }
+    .subject { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b9bfd2; }
+    .preview { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6f758c; font-size: 12px; }
+
+    .viewer { min-height: 650px; display: flex; flex-direction: column; }
+    .viewer-empty, .empty { color: var(--muted); display: grid; place-items: center; text-align: center; min-height: 300px; padding: 30px; }
+    .empty-icon { width: 52px; height: 52px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; display: grid; place-items: center; margin: 0 auto 15px; color: #737990; }
+    .empty-icon svg { width: 22px; }
+    .empty strong { color: #cfd4e3; display: block; margin-bottom: 6px; }
+    .message-head { padding: 18px; border-bottom: 1px solid var(--border); }
+    .message-head h2 { margin: 0 0 14px; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+    .message-meta { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; align-items: center; gap: 10px; }
+    .message-from { font-weight: 700; overflow-wrap: anywhere; }
+    .message-to { color: var(--muted); margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
+    .message-body { padding: 22px; color: #d0d5e3; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; }
+
+    .tools-pane { padding: 16px; }
+    .tools-pane h3 { margin: 0 0 16px; font-size: 14px; }
+    .label { display: block; color: var(--muted); margin: 13px 0 7px; font-size: 12px; }
+    .button-stack { display: grid; gap: 8px; margin-top: 11px; }
+    .divider { height: 1px; background: var(--border); margin: 20px 0; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; padding: 12px; }
+    .stat b { display: block; font-size: 19px; margin-bottom: 3px; }
+    .stat span { color: var(--muted); font-size: 11px; }
+    .hint { color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 9px; }
+
+    .modal-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.72); display: grid; place-items: center; padding: 18px; }
+    .modal { width: min(560px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; background: #11131c; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 24px 80px rgba(0,0,0,.55); }
+    .modal-head { min-height: 57px; display: flex; align-items: center; padding: 0 17px; border-bottom: 1px solid var(--border); }
+    .modal-head h2 { font-size: 16px; margin: 0; }
+    .modal-body { padding: 18px; }
+    .modal-actions { padding: 13px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+    .form-error { min-height: 20px; margin-top: 10px; color: var(--red); font-size: 12px; }
+    .code { background: #090a0f; border: 1px solid var(--border); border-radius: 6px; padding: 12px; color: #b9f3e1; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .key-result { margin-top: 14px; }
+    .api-key-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .api-key-row .meta { flex: 1; min-width: 0; }
+    .api-key-row .meta b { display: block; overflow: hidden; text-overflow: ellipsis; }
+    .api-key-row .meta span { color: var(--muted); font-size: 11px; }
+
+    .toast { position: fixed; right: 18px; bottom: 18px; z-index: 200; max-width: 360px; min-height: 48px; background: #10251f; color: #9ff2d5; border: 1px solid rgba(49,214,161,.35); border-radius: 7px; padding: 0 14px; display: flex; align-items: center; gap: 9px; box-shadow: 0 16px 48px rgba(0,0,0,.45); }
+    .toast.error { background: #2b1318; color: #ffb1bd; border-color: rgba(251,113,133,.4); }
+    .toast svg { width: 17px; flex: 0 0 auto; }
+
+    @media (max-width: 1220px) {
+      .workspace { grid-template-columns: 230px 315px minmax(330px, 1fr); }
+      .tools-pane { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      .tools-pane .divider { display: none; }
+    }
+    @media (max-width: 850px) {
+      main { padding: 12px; }
+      .topbar-inner { padding: 0 12px; gap: 12px; }
+      .nav-btn span, .top-actions .settings-label { display: none; }
+      .current-bar { align-items: stretch; flex-wrap: wrap; }
+      .current-address { flex-basis: calc(100% - 22px); }
+      .current-actions { width: 100%; }
+      .current-actions .btn { flex: 1; }
+      .workspace { display: block; min-height: 0; }
+      .pane + .pane { border-left: 0; border-top: 1px solid var(--border); }
+      .mailbox-list { height: 240px; }
+      .email-list { height: 400px; }
+      .viewer { min-height: 460px; }
+      .tools-pane { display: block; }
+    }
+    @media (max-width: 480px) {
+      .brand { font-size: 15px; }
+      .topbar-inner { gap: 6px; }
+      .nav-btn { padding: 8px; }
+      .current-actions .btn span { display: none; }
+      .tools-pane { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand"><span class="brand-mark"><i data-lucide="zap"></i></span><span>HNT</span><span>Mail</span></div>
+      <nav class="nav">
+        <button class="nav-btn active" title="Hộp thư"><i data-lucide="inbox"></i><span>Hộp thư</span></button>
+        <button class="nav-btn" onclick="openApiModal()" title="Quản lý API"><i data-lucide="key-round"></i><span>API</span></button>
+      </nav>
+      <div class="top-actions">
+        <button class="btn" onclick="openLogin(true)" title="Cấu hình kết nối"><i data-lucide="settings"></i><span class="settings-label">Cấu hình</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="current-bar">
+      <span class="status-dot"></span>
+      <div class="current-address" id="current-address">Chưa chọn hộp thư</div>
+      <div class="current-actions">
+        <button class="btn btn-cyan" onclick="copyCurrent()"><i data-lucide="copy"></i><span>Sao chép</span></button>
+        <button class="btn" onclick="refreshAll()"><i data-lucide="refresh-cw"></i><span>Làm mới</span></button>
+        <button class="btn btn-danger" onclick="deleteCurrentMailbox()"><i data-lucide="trash-2"></i><span>Xóa</span></button>
+      </div>
+    </section>
+
+    <div class="notice">
+      <i data-lucide="refresh-cw"></i>
+      <span id="refresh-label">Tự động làm mới đang bật, mỗi 5 giây</span>
+      <button class="switch on" id="refresh-switch" onclick="toggleAutoRefresh()" aria-label="Bật tắt tự động làm mới"></button>
+    </div>
+
+    <section class="workspace">
+      <aside class="pane">
+        <div class="pane-head"><span class="pane-title">Hộp thư đã lưu</span><span class="badge" id="mailbox-count">0</span></div>
+        <div class="search"><i data-lucide="search"></i><input id="mailbox-search" placeholder="Tìm hộp thư..." oninput="renderMailboxes()"></div>
+        <div class="mailbox-list" id="mailbox-list"></div>
+      </aside>
+
+      <section class="pane">
+        <div class="pane-head"><span class="pane-title">Email đã nhận</span><span class="badge" id="email-count">0</span><button class="btn btn-icon spacer" onclick="clearInbox()" title="Xóa toàn bộ email"><i data-lucide="trash-2"></i></button></div>
+        <div class="email-tools">
+          <div class="search" style="margin:0"><i data-lucide="search"></i><input id="email-search" placeholder="Tìm email..." oninput="renderEmails()"></div>
+          <div class="filters"><button class="filter active" data-filter="all" onclick="setFilter('all')">Tất cả</button><button class="filter" data-filter="unread" onclick="setFilter('unread')">Chưa đọc</button></div>
+        </div>
+        <div class="email-list" id="email-list"></div>
+      </section>
+
+      <article class="pane viewer" id="viewer">
+        <div class="viewer-empty empty"><div><span class="empty-icon"><i data-lucide="mail-open"></i></span><strong>Chọn một email</strong><span>Nội dung thư sẽ hiển thị tại đây</span></div></div>
+      </article>
+
+      <aside class="pane tools-pane">
+        <div>
+          <h3>Tạo địa chỉ mới</h3>
+          <label class="label" for="custom-local">Tên hộp thư</label>
+          <input class="field" id="custom-local" maxlength="24" placeholder="ví dụ: hieu.dev">
+          <label class="label" for="domain-select">Domain</label>
+          <select id="domain-select"><option value="hntdev.me">hntdev.me</option></select>
+          <div class="button-stack">
+            <button class="btn btn-primary btn-wide" onclick="createCustomMailbox()"><i data-lucide="plus"></i>Tạo theo ý muốn</button>
+            <button class="btn btn-wide" onclick="generateMailbox()"><i data-lucide="shuffle"></i>Tạo ngẫu nhiên</button>
+          </div>
+          <div class="hint">Địa chỉ ngẫu nhiên có dạng họ tên tiếng Anh + 4 chữ số.</div>
+        </div>
+        <div>
+          <div class="divider"></div>
+          <h3>Thống kê</h3>
+          <div class="stats">
+            <div class="stat"><b id="stat-mailboxes">0</b><span>Hộp thư</span></div>
+            <div class="stat"><b id="stat-messages">0</b><span>Email</span></div>
+          </div>
+          <div class="divider"></div>
+          <button class="btn btn-wide" onclick="openApiModal()"><i data-lucide="code-2"></i>API dành cho lập trình</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div class="modal-backdrop hidden" id="login-modal">
+    <div class="modal">
+      <div class="modal-head"><h2>Kết nối Cloudflare Worker</h2></div>
+      <form onsubmit="saveConnection(event)">
+        <div class="modal-body">
+          <label class="label" for="worker-url">Worker URL</label>
+          <input class="field" id="worker-url" type="url" placeholder="https://email-inbox-worker.example.workers.dev" required>
+          <label class="label" for="admin-secret">API Secret quản trị</label>
+          <input class="field" id="admin-secret" type="password" placeholder="Nhập API_SECRET" required>
+          <div class="form-error" id="login-error"></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="btn hidden" id="cancel-login" onclick="closeModal('login-modal')">Hủy</button><button class="btn btn-primary" type="submit"><i data-lucide="plug"></i>Kết nối</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="api-modal">
+    <div class="modal">
+      <div class="modal-head"><h2>API dành cho lập trình</h2><button class="btn btn-icon spacer" onclick="closeModal('api-modal')" title="Đóng"><i data-lucide="x"></i></button></div>
+      <div class="modal-body">
+        <div class="code" id="api-example"></div>
+        <label class="label" for="api-key-name">Tên API key mới</label>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input class="field" id="api-key-name" placeholder="VS Code, CI, dự án cá nhân"><button class="btn btn-primary" onclick="generateApiKey()"><i data-lucide="key-round"></i>Tạo key</button></div>
+        <div class="key-result hidden" id="key-result"><div class="label">API key mới, chỉ hiển thị một lần</div><div class="code" id="new-api-key"></div><button class="btn btn-cyan btn-wide" style="margin-top:8px" onclick="copyNewApiKey()"><i data-lucide="copy"></i>Sao chép API key</button></div>
+        <div class="label" style="margin-top:20px">API key đang hoạt động</div>
+        <div id="api-key-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"><i data-lucide="circle-check"></i><span id="toast-text"></span></div>
+
+  <script>
+    const state = {
+      workerUrl: localStorage.getItem("hnt_worker_url") || "",
+      secret: localStorage.getItem("hnt_admin_secret") || "",
+      domains: [], mailboxes: [], emails: [], currentMailbox: "", currentEmailId: "",
+      filter: "all", autoRefresh: true, timer: null, newApiKey: ""
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const icons = () => window.lucide && window.lucide.createIcons({ attrs: { "stroke-width": 1.8 } });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      icons();
+      if (!state.workerUrl || !state.secret) return openLogin(false);
+      $("worker-url").value = state.workerUrl;
+      try { await initialize(); } catch (error) { openLogin(false, error.message); }
+      startAutoRefresh();
+    });
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${state.workerUrl}${path}`, {
+        ...options,
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${state.secret}`, ...(options.headers || {}) }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    async function initialize() {
+      const [domainData, mailboxData] = await Promise.all([api("/domains"), api("/mailboxes")]);
+      state.domains = domainData.domains?.length ? domainData.domains : ["hntdev.me"];
+      state.mailboxes = mailboxData.mailboxes || [];
+      renderDomains();
+      renderMailboxes();
+      if (state.mailboxes.length) await selectMailbox(state.mailboxes[0].address);
+      else renderEmails();
+      updateStats();
+    }
+
+    function openLogin(canCancel, message = "") {
+      $("worker-url").value = state.workerUrl;
+      $("admin-secret").value = state.secret;
+      $("cancel-login").classList.toggle("hidden", !canCancel);
+      $("login-error").textContent = message;
+      $("login-modal").classList.remove("hidden");
+      icons();
+    }
+
+    async function saveConnection(event) {
+      event.preventDefault();
+      const oldUrl = state.workerUrl, oldSecret = state.secret;
+      state.workerUrl = $("worker-url").value.trim().replace(/\/$/, "");
+      state.secret = $("admin-secret").value.trim();
+      $("login-error").textContent = "Đang kiểm tra kết nối...";
+      try {
+        await api("/domains");
+        localStorage.setItem("hnt_worker_url", state.workerUrl);
+        localStorage.setItem("hnt_admin_secret", state.secret);
+        closeModal("login-modal");
+        await initialize();
+        startAutoRefresh();
+        toast("Kết nối Worker thành công");
+      } catch (error) {
+        state.workerUrl = oldUrl; state.secret = oldSecret;
+        $("login-error").textContent = `Không thể kết nối: ${error.message}`;
+      }
+    }
+
+    function renderDomains() {
+      $("domain-select").innerHTML = state.domains.map((domain) => `<option value="${escapeHtml(domain)}">${escapeHtml(domain)}</option>`).join("");
+    }
+
+    function renderMailboxes() {
+      const query = $("mailbox-search").value.trim().toLowerCase();
+      const items = state.mailboxes.filter((mailbox) => mailbox.address.includes(query));
+      $("mailbox-count").textContent = state.mailboxes.length;
+      if (!items.length) {
+        $("mailbox-list").innerHTML = `<div class="empty"><div><span class="empty-icon"><i data-lucide="inbox"></i></span><strong>Chưa có hộp thư</strong><span>Hãy tạo địa chỉ đầu tiên</span></div></div>`;
+      } else {
+        $("mailbox-list").innerHTML = items.map((mailbox) => `
+          <button class="mailbox-item ${mailbox.address === state.currentMailbox ? "active" : ""}" onclick="selectMailbox('${escapeJs(mailbox.address)}')">
+            <span class="mailbox-avatar"><i data-lucide="at-sign"></i></span>
+            <span><span class="mailbox-name">${escapeHtml(mailbox.address)}</span><span class="mailbox-time">${formatDate(mailbox.createdAt)}</span></span>
+            <span class="count">${mailbox.messageCount || 0}</span>
+          </button>`).join("");
+      }
+      icons(); updateStats();
+    }
+
+    async function selectMailbox(address) {
+      state.currentMailbox = address;
+      state.currentEmailId = "";
+      $("current-address").textContent = address;
+      renderMailboxes();
+      renderViewer();
+      await loadEmails();
+    }
+
+    async function loadMailboxes() {
+      const data = await api("/mailboxes");
+      state.mailboxes = data.mailboxes || [];
+      if (state.currentMailbox && !state.mailboxes.some((item) => item.address === state.currentMailbox)) state.currentMailbox = "";
+      renderMailboxes();
+    }
+
+    async function loadEmails(silent = false) {
+      if (!state.currentMailbox) { state.emails = []; renderEmails(); return; }
+      try {
+        const data = await api(`/emails?address=${encodeURIComponent(state.currentMailbox)}&limit=100`);
+        state.emails = data.emails || [];
+        renderEmails(); updateStats();
+      } catch (error) { if (!silent) toast(error.message, true); }
+    }
+
+    function renderEmails() {
+      const query = $("email-search").value.trim().toLowerCase();
+      const emails = state.emails.filter((email) => {
+        const matchesFilter = state.filter !== "unread" || !email.read;
+        const text = `${email.from} ${email.subject} ${email.preview}`.toLowerCase();
+        return matchesFilter && text.includes(query);
+      });
+      $("email-count").textContent = state.emails.length;
+      if (!state.currentMailbox || !emails.length) {
+        $("email-list").innerHTML = `<div class="empty"><div><span class="empty-icon"><i data-lucide="mail"></i></span><strong>${state.currentMailbox ? "Chưa có email" : "Chọn hộp thư"}</strong><span>${state.currentMailbox ? "Email mới sẽ tự xuất hiện" : "Chọn một địa chỉ ở bên trái"}</span></div></div>`;
+      } else {
+        $("email-list").innerHTML = emails.map((email) => `
+          <button class="email-item ${email.read ? "" : "unread"} ${email.id === state.currentEmailId ? "active" : ""}" onclick="openEmail('${email.id}')">
+            <span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span>
+            <span><span class="email-row"><span class="sender">${escapeHtml(email.from)}</span><span class="email-date">${formatRelative(email.date)}</span></span><span class="subject">${escapeHtml(email.subject || "(Không có tiêu đề)")}</span><span class="preview">${escapeHtml(email.preview || "")}</span></span>
+          </button>`).join("");
+      }
+      icons();
+    }
+
+    async function openEmail(id) {
+      try {
+        const email = await api(`/emails/${id}`);
+        state.currentEmailId = id;
+        const summary = state.emails.find((item) => item.id === id);
+        if (summary) summary.read = true;
+        renderEmails(); renderViewer(email);
+      } catch (error) { toast(error.message, true); }
+    }
+
+    function renderViewer(email) {
+      if (!email) {
+        $("viewer").innerHTML = `<div class="viewer-empty empty"><div><span class="empty-icon"><i data-lucide="mail-open"></i></span><strong>Chọn một email</strong><span>Nội dung thư sẽ hiển thị tại đây</span></div></div>`;
+      } else {
+        $("viewer").innerHTML = `<div class="message-head"><h2>${escapeHtml(email.subject || "(Không có tiêu đề)")}</h2><div class="message-meta"><span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span><div><div class="message-from">${escapeHtml(email.from)}</div><div class="message-to">Đến ${escapeHtml(email.to)}</div></div><button class="btn btn-icon btn-danger" onclick="deleteEmail('${email.id}')" title="Xóa email"><i data-lucide="trash-2"></i></button></div></div><div class="message-body" id="message-body"></div>`;
+        $("message-body").textContent = email.body || "(Email không có nội dung văn bản)";
+      }
+      icons();
+    }
+
+    async function createCustomMailbox() {
+      const local = $("custom-local").value.trim();
+      if (!local) return toast("Hãy nhập tên hộp thư", true);
+      await createMailbox({ local, domain: $("domain-select").value });
+      $("custom-local").value = "";
+    }
+
+    async function generateMailbox() { await createMailbox({ domain: $("domain-select").value }); }
+
+    async function createMailbox(payload) {
+      try {
+        const data = await api("/mailboxes", { method: "POST", body: JSON.stringify(payload) });
+        state.mailboxes.unshift({ ...data.mailbox, messageCount: 0 });
+        await selectMailbox(data.mailbox.address);
+        toast(`Đã tạo ${data.mailbox.address}`);
+      } catch (error) { toast(error.message, true); }
+    }
+
+    async function deleteCurrentMailbox() {
+      if (!state.currentMailbox) return toast("Chưa chọn hộp thư", true);
+      if (!confirm(`Xóa hộp thư ${state.currentMailbox} và toàn bộ email bên trong?`)) return;
+      try {
+        await api(`/mailboxes/${encodeURIComponent(state.currentMailbox)}?deleteEmails=true`, { method: "DELETE" });
+        const deleted = state.currentMailbox;
+        state.mailboxes = state.mailboxes.filter((item) => item.address !== deleted);
+        state.currentMailbox = ""; state.emails = []; state.currentEmailId = "";
+        renderMailboxes(); renderEmails(); renderViewer();
+        $("current-address").textContent = "Chưa chọn hộp thư";
+        if (state.mailboxes.length) await selectMailbox(state.mailboxes[0].address);
+        toast(`Đã xóa ${deleted}`);
+      } catch (error) { toast(error.message, true); }
+    }
+
+    async function clearInbox() {
+      if (!state.currentMailbox || !state.emails.length) return;
+      if (!confirm(`Xóa toàn bộ email trong ${state.currentMailbox}?`)) return;
+      try {
+        await api(`/emails?address=${encodeURIComponent(state.currentMailbox)}`, { method: "DELETE" });
+        state.emails = []; state.currentEmailId = "";
+        const mailbox = state.mailboxes.find((item) => item.address === state.currentMailbox);
+        if (mailbox) mailbox.messageCount = 0;
+        renderEmails(); renderViewer(); renderMailboxes(); toast("Đã dọn sạch hộp thư");
+      } catch (error) { toast(error.message, true); }
+    }
+
+    async function deleteEmail(id) {
+      if (!confirm("Xóa email này?")) return;
+      try {
+        await api(`/emails/${id}`, { method: "DELETE" });
+        state.emails = state.emails.filter((email) => email.id !== id);
+        state.currentEmailId = ""; renderEmails(); renderViewer(); await loadMailboxes(); toast("Đã xóa email");
+      } catch (error) { toast(error.message, true); }
+    }
+
+    function setFilter(filter) {
+      state.filter = filter;
+      document.querySelectorAll(".filter").forEach((button) => button.classList.toggle("active", button.dataset.filter === filter));
+      renderEmails();
+    }
+
+    async function refreshAll(silent = false) {
+      if (!state.workerUrl || !state.secret) return;
+      try { await Promise.all([loadMailboxes(), loadEmails(true)]); if (!silent) toast("Đã cập nhật hộp thư"); }
+      catch (error) { if (!silent) toast(error.message, true); }
+    }
+
+    function toggleAutoRefresh() {
+      state.autoRefresh = !state.autoRefresh;
+      $("refresh-switch").classList.toggle("on", state.autoRefresh);
+      $("refresh-label").textContent = state.autoRefresh ? "Tự động làm mới đang bật, mỗi 5 giây" : "Tự động làm mới đang tắt";
+      startAutoRefresh();
+    }
+
+    function startAutoRefresh() {
+      clearInterval(state.timer);
+      if (state.autoRefresh) state.timer = setInterval(() => refreshAll(true), 5000);
+    }
+
+    async function openApiModal() {
+      if (!state.workerUrl || !state.secret) return openLogin(false);
+      $("api-example").textContent = `curl "${state.workerUrl}/mailboxes" \\\n  -H "X-API-Key: YOUR_API_KEY"\n\n# Tạo email ngẫu nhiên\ncurl -X POST "${state.workerUrl}/mailboxes" \\\n  -H "X-API-Key: YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"domain":"hntdev.me"}'`;
+      $("api-modal").classList.remove("hidden");
+      try { await loadApiKeys(); } catch (error) { $("api-key-list").textContent = error.message; }
+      icons();
+    }
+
+    async function loadApiKeys() {
+      const data = await api("/api-keys");
+      const keys = data.apiKeys || [];
+      $("api-key-list").innerHTML = keys.length ? keys.map((key) => `<div class="api-key-row"><div class="meta"><b>${escapeHtml(key.name)}</b><span>Tạo ${formatDate(key.createdAt)}</span></div><button class="btn btn-icon btn-danger" onclick="deleteApiKey('${key.id}')" title="Thu hồi API key"><i data-lucide="trash-2"></i></button></div>`).join("") : `<div class="hint">Chưa có API key nào.</div>`;
+      icons();
+    }
+
+    async function generateApiKey() {
+      try {
+        const data = await api("/api-keys", { method: "POST", body: JSON.stringify({ name: $("api-key-name").value.trim() }) });
+        state.newApiKey = data.apiKey.key;
+        $("new-api-key").textContent = state.newApiKey;
+        $("key-result").classList.remove("hidden");
+        $("api-key-name").value = "";
+        await loadApiKeys(); toast("Đã tạo API key mới");
+      } catch (error) { toast(error.message, true); }
+    }
+
+    async function deleteApiKey(id) {
+      if (!confirm("Thu hồi API key này? Các ứng dụng đang dùng key sẽ ngừng hoạt động.")) return;
+      try { await api(`/api-keys/${id}`, { method: "DELETE" }); await loadApiKeys(); toast("Đã thu hồi API key"); }
+      catch (error) { toast(error.message, true); }
+    }
+
+    function copyCurrent() {
+      if (!state.currentMailbox) return toast("Chưa chọn hộp thư", true);
+      copyText(state.currentMailbox, "Đã sao chép địa chỉ email");
+    }
+    function copyNewApiKey() { if (state.newApiKey) copyText(state.newApiKey, "Đã sao chép API key"); }
+    async function copyText(value, message) { try { await navigator.clipboard.writeText(value); toast(message); } catch { toast("Không thể sao chép", true); } }
+
+    function updateStats() {
+      $("stat-mailboxes").textContent = state.mailboxes.length;
+      $("stat-messages").textContent = state.mailboxes.reduce((sum, item) => sum + (item.messageCount || 0), 0);
+    }
+    function closeModal(id) { $(id).classList.add("hidden"); }
+    function toast(message, error = false) {
+      const element = $("toast"); $("toast-text").textContent = message;
+      element.classList.toggle("error", error); element.classList.remove("hidden"); icons();
+      clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.add("hidden"), 3200);
+    }
+    function senderInitial(from) { return String(from || "?").replace(/^.*</, "").charAt(0).toUpperCase() || "?"; }
+    function formatDate(value) { if (!value) return ""; return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value)); }
+    function formatRelative(value) {
+      const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+      if (seconds < 60) return "vừa xong"; if (seconds < 3600) return `${Math.floor(seconds / 60)} phút`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)} giờ`; return `${Math.floor(seconds / 86400)} ngày`;
+    }
+    function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[char])); }
+    function escapeJs(value) { return String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+  </script>
+</body>
+</html>

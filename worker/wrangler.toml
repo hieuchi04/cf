@@ -1,0 +1,19 @@
+name = "email-inbox-worker"
+main = "email-worker.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# Danh sach domain duoc phep tao temp mailbox, cach nhau bang dau phay
+ALLOWED_DOMAINS = "hntdev.me"
+
+# KV Namespace — tạo bằng: wrangler kv:namespace create EMAIL_STORE
+# Sau đó thay id bên dưới bằng ID thật
+[[kv_namespaces]]
+binding = "EMAIL_STORE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Email routing — worker này nhận email
+# Secret: API_SECRET
+# Tạo bằng: wrangler secret put API_SECRET
+# Nhập một chuỗi ngẫu nhiên bảo mật, ví dụ: openssl rand -hex 32
+# Secret tùy chọn cho code: wrangler secret put CODING_API_KEY
