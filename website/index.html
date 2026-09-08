@@ -143,6 +143,8 @@
     .stat { border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; padding: 12px; }
     .stat b { display: block; font-size: 19px; margin-bottom: 3px; }
     .stat span { color: var(--muted); font-size: 11px; }
+    .current-mailbox-card { border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; padding: 12px; }
+    .current-mailbox-card b { display: block; overflow-wrap: anywhere; color: #dfe4f4; font-size: 13px; line-height: 1.45; }
     .hint { color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 9px; }
 
     .modal-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.72); display: grid; place-items: center; padding: 18px; }
@@ -261,11 +263,9 @@
         </div>
         <div>
           <div class="divider"></div>
-          <h3>Thống kê</h3>
-          <div class="stats">
-            <div class="stat"><b id="stat-mailboxes">0</b><span>Hộp thư</span></div>
-            <div class="stat"><b id="stat-messages">0</b><span>Email</span></div>
-          </div>
+          <h3>Email hiện tại</h3>
+          <div class="current-mailbox-card"><b id="sidebar-current-address">Chưa chọn hộp thư</b></div>
+          <button class="btn btn-cyan btn-wide" style="margin-top:8px" onclick="copyCurrent()"><i data-lucide="copy"></i>Sao chép email</button>
           <div class="divider"></div>
           <button class="btn btn-wide" onclick="openApiModal()"><i data-lucide="code-2"></i>API dành cho lập trình</button>
         </div>
@@ -310,7 +310,7 @@
       workerUrl: localStorage.getItem("hnt_worker_url") || "",
       secret: localStorage.getItem("hnt_admin_secret") || "",
       domains: [], mailboxes: [], emails: [], currentMailbox: "", currentEmailId: "",
-      filter: "all", autoRefresh: true, timer: null, newApiKey: "", viewerMode: "html"
+      filter: "all", autoRefresh: true, timer: null, newApiKey: "", viewerMode: "text"
     };
 
     const $ = (id) => document.getElementById(id);
@@ -444,7 +444,7 @@
       try {
         const email = await api(`/emails/${id}`);
         state.currentEmailId = id;
-        state.viewerMode = email.html ? "html" : "text";
+        state.viewerMode = "text";
         const summary = state.emails.find((item) => item.id === id);
         if (summary) summary.read = true;
         renderEmails(); renderViewer(email);
@@ -648,8 +648,7 @@
     async function copyText(value, message) { try { await navigator.clipboard.writeText(value); toast(message); } catch { toast("Không thể sao chép", true); } }
 
     function updateStats() {
-      $("stat-mailboxes").textContent = state.mailboxes.length;
-      $("stat-messages").textContent = state.mailboxes.reduce((sum, item) => sum + (item.messageCount || 0), 0);
+      $("sidebar-current-address").textContent = state.currentMailbox || "Chưa chọn hộp thư";
     }
     function closeModal(id) { $(id).classList.add("hidden"); }
     function toast(message, error = false) {
