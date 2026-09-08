@@ -1,4 +1,4 @@
-name = "email-inbox-worker"
+name = "hntdev-mail-api"
 main = "email-worker.js"
 compatibility_date = "2024-01-01"
 
