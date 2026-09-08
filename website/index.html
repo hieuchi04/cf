@@ -489,7 +489,12 @@
     }
 
     function buildSafeEmailHtml(html) {
-      const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+      // Remove scripts from the raw MIME HTML first. This prevents malformed or
+      // foreign-namespace script nodes from ever reaching iframe.srcdoc.
+      const source = String(html || "")
+        .replace(/<\s*script\b[^>]*>[\s\S]*?(?:<\s*\/\s*script\s*>|$)/gi, "")
+        .replace(/<\s*script\b[^>]*\/?>/gi, "");
+      const doc = new DOMParser().parseFromString(source, "text/html");
       doc.querySelectorAll("script, iframe, object, embed, form, input, button, textarea, select, link, meta, base").forEach((element) => element.remove());
 
       doc.querySelectorAll("*").forEach((element) => {
@@ -518,7 +523,10 @@
       });
 
       const styles = Array.from(doc.querySelectorAll("style"), (style) => style.outerHTML).join("");
-      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src data:"><base target="_blank">${styles}<style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box;overflow:auto}img{max-width:100%;height:auto}</style></head><body>${doc.body.innerHTML}</body></html>`;
+      const safeBody = doc.body.innerHTML
+        .replace(/<\s*script\b[^>]*>[\s\S]*?(?:<\s*\/\s*script\s*>|$)/gi, "")
+        .replace(/<\s*script\b[^>]*\/?>/gi, "");
+      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src data:"><base target="_blank">${styles}<style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box;overflow:auto}img{max-width:100%;height:auto}</style></head><body>${safeBody}</body></html>`;
     }
 
     async function createCustomMailbox() {
