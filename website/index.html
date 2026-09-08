@@ -75,8 +75,8 @@
     .switch.on { background: var(--green); }
     .switch.on::after { transform: translateX(15px); }
 
-    .workspace { margin-top: 14px; min-height: 650px; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(290px, 1.05fr) minmax(360px, 1.8fr) minmax(260px, .9fr); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
-    .pane { min-width: 0; background: var(--surface); }
+    .workspace { margin-top: 14px; height: calc(100dvh - 228px); min-height: 520px; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(290px, 1.05fr) minmax(360px, 1.8fr) minmax(260px, .9fr); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+    .pane { min-width: 0; min-height: 0; background: var(--surface); overflow: hidden; }
     .pane + .pane { border-left: 1px solid var(--border); }
     .pane-head { height: 57px; padding: 0 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; }
     .pane-title { font-weight: 750; }
@@ -89,7 +89,7 @@
     input::placeholder { color: #686d82; }
     select { appearance: auto; }
 
-    .mailbox-list, .email-list { overflow-x: hidden; overflow-y: auto; height: 532px; scrollbar-width: thin; scrollbar-color: #34384a transparent; }
+    .mailbox-list, .email-list { overflow-x: hidden; overflow-y: auto; height: calc(100% - 118px); scrollbar-width: thin; scrollbar-color: #34384a transparent; }
     .mailbox-item { width: 100%; border: 0; border-bottom: 1px solid rgba(41,44,60,.75); background: transparent; text-align: left; padding: 12px 13px; cursor: pointer; display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 10px; }
     .mailbox-item:hover { background: rgba(255,255,255,.025); }
     .mailbox-item.active { background: rgba(130,84,246,.11); box-shadow: inset 2px 0 var(--purple); }
@@ -104,7 +104,7 @@
     .filters { display: flex; gap: 4px; margin-top: 8px; }
     .filter { border: 0; background: transparent; color: var(--muted); border-radius: 5px; padding: 6px 9px; cursor: pointer; font-size: 12px; }
     .filter.active { background: rgba(130,84,246,.16); color: #c8b7ff; }
-    .email-list { height: 481px; }
+    .email-list { height: calc(100% - 151px); }
     .email-item { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: inherit; text-align: left; padding: 14px 15px; cursor: pointer; display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 10px; }
     .email-item:hover, .email-item.active { background: rgba(255,255,255,.025); }
     .email-item.unread { box-shadow: inset 2px 0 var(--cyan); }
@@ -115,21 +115,21 @@
     .subject { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b9bfd2; }
     .preview { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6f758c; font-size: 12px; }
 
-    .viewer { min-height: 650px; display: flex; flex-direction: column; }
+    .viewer { height: 100%; min-height: 0; display: flex; flex-direction: column; }
     .viewer-empty, .empty { color: var(--muted); display: grid; place-items: center; text-align: center; min-height: 300px; padding: 30px; }
     .empty-icon { width: 52px; height: 52px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; display: grid; place-items: center; margin: 0 auto 15px; color: #737990; }
     .empty-icon svg { width: 22px; }
     .empty strong { color: #cfd4e3; display: block; margin-bottom: 6px; }
-    .message-head { padding: 18px; border-bottom: 1px solid var(--border); }
+    .message-head { flex: 0 0 auto; padding: 18px; border-bottom: 1px solid var(--border); }
     .message-head h2 { margin: 0 0 14px; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
     .message-meta { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; align-items: center; gap: 10px; }
     .message-from { font-weight: 700; overflow-wrap: anywhere; }
     .message-to { color: var(--muted); margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
-    .message-body { padding: 22px; color: #d0d5e3; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; }
-    .message-content { min-height: 520px; flex: 1; background: white; }
-    .message-frame { display: block; width: 100%; min-height: 620px; border: 0; background: white; color-scheme: light; }
+    .message-body { min-height: 0; padding: 22px; color: #d0d5e3; line-height: 1.65; white-space: pre-wrap; overflow: auto; overflow-wrap: anywhere; flex: 1; }
+    .message-content { min-height: 0; flex: 1; overflow: hidden; background: white; }
+    .message-frame { display: block; width: 100%; height: 100%; min-height: 0; border: 0; background: white; color-scheme: light; }
 
-    .tools-pane { padding: 16px; }
+    .tools-pane { padding: 16px; overflow-y: auto; }
     .tools-pane h3 { margin: 0 0 16px; font-size: 14px; }
     .label { display: block; color: var(--muted); margin: 13px 0 7px; font-size: 12px; }
     .button-stack { display: grid; gap: 8px; margin-top: 11px; }
@@ -159,7 +159,10 @@
     .toast svg { width: 17px; flex: 0 0 auto; }
 
     @media (max-width: 1220px) {
-      .workspace { grid-template-columns: 230px 315px minmax(330px, 1fr); }
+      .workspace { height: auto; min-height: 650px; grid-template-columns: 230px 315px minmax(330px, 1fr); }
+      .mailbox-list { height: 532px; }
+      .email-list { height: 481px; }
+      .viewer { height: 650px; }
       .tools-pane { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
       .tools-pane .divider { display: none; }
     }
@@ -171,11 +174,11 @@
       .current-address { flex-basis: calc(100% - 22px); }
       .current-actions { width: 100%; }
       .current-actions .btn { flex: 1; }
-      .workspace { display: block; min-height: 0; }
+      .workspace { display: block; height: auto; min-height: 0; }
       .pane + .pane { border-left: 0; border-top: 1px solid var(--border); }
       .mailbox-list { height: 240px; }
       .email-list { height: 400px; }
-      .viewer { min-height: 460px; }
+      .viewer { height: 460px; min-height: 460px; }
       .tools-pane { display: block; }
     }
     @media (max-width: 480px) {
@@ -482,7 +485,7 @@
 
         if (element.tagName === "IMG") {
           const source = element.getAttribute("src") || "";
-          if (source && !/^(data:|cid:)/i.test(source)) {
+          if (source && !/^(https:|data:)/i.test(source)) {
             element.removeAttribute("src");
             element.setAttribute("alt", element.getAttribute("alt") || "Ảnh từ xa đã bị chặn");
           }
@@ -494,7 +497,7 @@
       });
 
       const styles = Array.from(doc.querySelectorAll("style"), (style) => style.outerHTML).join("");
-      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:"><base target="_blank">${styles}<style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box}img{max-width:100%;height:auto}</style></head><body>${doc.body.innerHTML}</body></html>`;
+      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src data:"><base target="_blank">${styles}<style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box;overflow:auto}img{max-width:100%;height:auto}</style></head><body>${doc.body.innerHTML}</body></html>`;
     }
 
     async function createCustomMailbox() {

@@ -16,8 +16,7 @@ globalThis.Response = class TestResponse {
   async json() { return JSON.parse(this.body); }
 };
 
-const source = await fs.readFile(new URL("./email-worker.js", import.meta.url), "utf8");
-const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+const moduleUrl = new URL(`./email-worker.js?test=${Date.now()}`, import.meta.url);
 const { default: worker, email: receiveEmail } = await import(moduleUrl);
 
 class MemoryKV {
@@ -145,6 +144,40 @@ test("preserves HTML content from multipart email", async () => {
   assert.equal(detail.body.subject, "Mã xác nhận");
   assert.equal(detail.body.body, "Your code is 1234");
   assert.match(detail.body.html, /<strong style="color:red">1234<\/strong>/);
+});
+
+test("repairs multipart content stored by the legacy parser", async () => {
+  const env = createEnv();
+  const id = crypto.randomUUID();
+  const boundary = "--==_mimepart_github_123";
+  const legacyBody = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: quoted-printable",
+    "",
+    "Your GitHub code is 73685014",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: quoted-printable",
+    "",
+    '<html><body><h1>GitHub</h1><a href=3D"https://github.com">73685014</a></body></html>',
+    `--${boundary}--`,
+  ].join("\r\n");
+  await env.EMAIL_STORE.put(`email:${id}`, JSON.stringify({
+    id,
+    from: "noreply@github.com",
+    to: "otp@hntdev.me",
+    domain: "hntdev.me",
+    subject: "GitHub code",
+    date: new Date().toISOString(),
+    body: legacyBody,
+    read: false,
+  }));
+
+  const detail = await request(env, `/emails/${id}`);
+  assert.equal(detail.body.body, "Your GitHub code is 73685014");
+  assert.match(detail.body.html, /<h1>GitHub<\/h1>/);
+  assert.match(detail.body.html, /href="https:\/\/github\.com"/);
 });
 
 test("dashboard has valid JavaScript and unique element IDs", async () => {

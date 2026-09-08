@@ -1,3 +1,5 @@
+import PostalMime from "postal-mime";
+
 /**
  * Cloudflare Email Worker + HTTP API — Multi-Domain
  *
@@ -42,8 +44,8 @@ const LAST_NAMES = [
 
 export async function email(message, env, ctx) {
   try {
-    const rawEmail = await streamToText(message.raw);
-    const content = extractEmailContent(rawEmail);
+    const parsedEmail = await PostalMime.parse(message.raw);
+    const content = normalizeParsedContent(parsedEmail);
 
     // Trích domain từ địa chỉ nhận, ví dụ: "inbox@site2.com" → "site2.com"
     const toAddress = normalizeEmail(message.to || "");
@@ -54,7 +56,7 @@ export async function email(message, env, ctx) {
       from:    message.from,
       to:      toAddress,
       domain:  toDomain,                                        // ← multi-domain
-      subject: decodeMimeHeader(extractHeader(rawEmail, "Subject")) || "(no subject)",
+      subject: parsedEmail.subject || "(no subject)",
       date:    new Date().toISOString(),
       body:    content.text,
       html:    content.html,
@@ -235,6 +237,7 @@ export default {
       const raw = await env.EMAIL_STORE.get(`email:${id}`);
       if (!raw) return jsonResponse({ error: "Not found" }, 404);
       const emailData = JSON.parse(raw);
+      await repairLegacyMimeContent(emailData);
       emailData.read = true;
       await env.EMAIL_STORE.put(`email:${id}`, JSON.stringify(emailData));
       return jsonResponse(emailData);
@@ -427,109 +430,64 @@ function jsonResponse(data, status = 200) {
   });
 }
 
-async function streamToText(stream) {
-  const reader = stream.getReader();
-  const chunks = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  return new TextDecoder().decode(
-    chunks.reduce((acc, chunk) => {
-      const merged = new Uint8Array(acc.length + chunk.length);
-      merged.set(acc);
-      merged.set(chunk, acc.length);
-      return merged;
-    }, new Uint8Array())
-  );
-}
-
-function extractHeader(raw, header) {
-  const headerBlock = String(raw || "").split(/\r?\n\r?\n/, 1)[0].replace(/\r?\n[ \t]+/g, " ");
-  const escapedHeader = header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = headerBlock.match(new RegExp(`^${escapedHeader}:\\s*(.+)$`, "im"));
-  return match ? match[1].trim() : null;
-}
-
-function decodeMimeHeader(value) {
-  const joined = String(value || "").replace(/\?=\s+(?==\?)/g, "?=");
-  return joined.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi, (match, charset, encoding, encoded) => {
-    try {
-      let binary;
-      if (encoding.toLowerCase() === "b") {
-        binary = atob(encoded.replace(/\s+/g, ""));
-      } else {
-        binary = encoded
-          .replace(/_/g, " ")
-          .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-      }
-      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      return new TextDecoder(charset).decode(bytes);
-    } catch {
-      return match;
-    }
-  });
-}
-
-function extractEmailContent(raw) {
-  const content = parseMimeEntity(raw);
-  const html = (content.html || "").trim().slice(0, 200000);
-  const text = (content.text || stripHtml(html) || "").trim().slice(0, 20000);
+function normalizeParsedContent(parsedEmail) {
+  const html = embedInlineImages(
+    String(parsedEmail?.html || ""),
+    parsedEmail?.attachments || []
+  ).trim().slice(0, 200000);
+  const text = String(parsedEmail?.text || stripHtml(html) || "").trim().slice(0, 20000);
   return { text, html };
 }
 
-function parseMimeEntity(raw) {
-  const separator = raw.search(/\r?\n\r?\n/);
-  if (separator < 0) return { text: raw, html: "" };
+function embedInlineImages(html, attachments) {
+  let result = html;
+  for (const attachment of attachments) {
+    const contentId = String(attachment.contentId || "").replace(/^<|>$/g, "");
+    if (!contentId || !String(attachment.mimeType || "").startsWith("image/")) continue;
 
-  const separatorMatch = raw.slice(separator).match(/^\r?\n\r?\n/)[0];
-  const headers = raw.slice(0, separator).replace(/\r?\n[ \t]+/g, " ");
-  const body = raw.slice(separator + separatorMatch.length);
-  const contentType = extractHeader(headers, "Content-Type") || "text/plain";
-  const encoding = extractHeader(headers, "Content-Transfer-Encoding") || "";
-  const boundaryMatch = contentType.match(/boundary="?([^";\r\n]+)"?/i);
-
-  if (boundaryMatch) {
-    const marker = `--${boundaryMatch[1].trim()}`;
-    const parts = body.split(marker).slice(1);
-    let text = "", html = "";
-    for (const rawPart of parts) {
-      const trimmed = rawPart.replace(/^\r?\n/, "").trim();
-      if (!trimmed || trimmed === "--" || trimmed.startsWith("--\r") || trimmed.startsWith("--\n")) continue;
-      const part = parseMimeEntity(trimmed.replace(/\r?\n--$/, ""));
-      if (!text && part.text) text = part.text;
-      if (!html && part.html) html = part.html;
+    try {
+      const bytes = attachment.content instanceof Uint8Array
+        ? attachment.content
+        : new Uint8Array(attachment.content);
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      result = result.replace(
+        new RegExp(`cid:${escapedId}`, "gi"),
+        `data:${attachment.mimeType};base64,${btoa(binary)}`
+      );
+    } catch (error) {
+      console.warn("Could not embed inline email image:", error);
     }
-    return { text, html };
   }
-
-  const decoded = decodeContent(body.trim(), encoding, contentType);
-  return contentType.toLowerCase().includes("text/html")
-    ? { text: "", html: decoded }
-    : { text: decoded, html: "" };
+  return result;
 }
 
-function decodeContent(text, encoding, contentType = "") {
-  const enc = (encoding || "").toLowerCase().trim();
-  const charset = (contentType.match(/charset="?([^";\s]+)"?/i) || [])[1] || "utf-8";
-  if (enc === "base64") {
-    try {
-      const binary = atob(text.replace(/\s+/g, ""));
-      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      return new TextDecoder(charset).decode(bytes);
-    } catch { return text; }
+async function repairLegacyMimeContent(emailData) {
+  if (emailData.html || !emailData.body) return false;
+
+  const match = String(emailData.body).match(/^--([^\r\n]+)\r?\nContent-Type:/i);
+  if (!match) return false;
+
+  try {
+    const raw = [
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/alternative; boundary="${match[1]}"`,
+      "",
+      emailData.body,
+    ].join("\r\n");
+    const parsedEmail = await PostalMime.parse(raw);
+    const content = normalizeParsedContent(parsedEmail);
+    if (!content.html) return false;
+    emailData.body = content.text;
+    emailData.html = content.html;
+    return true;
+  } catch (error) {
+    console.warn("Could not repair legacy MIME content:", error);
+    return false;
   }
-  if (enc === "quoted-printable") {
-    try {
-      const binary = text
-        .replace(/=\r?\n/g, "")
-        .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      return new TextDecoder(charset).decode(bytes);
-    } catch { return text; }
-  }
-  return text;
 }
 
 function stripHtml(html) {

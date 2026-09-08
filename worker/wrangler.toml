@@ -10,7 +10,7 @@ ALLOWED_DOMAINS = "hntdev.me"
 # Sau đó thay id bên dưới bằng ID thật
 [[kv_namespaces]]
 binding = "EMAIL_STORE"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "d71064e1d7384a989997d1da32c49892"
 
 # Email routing — worker này nhận email
 # Secret: API_SECRET
