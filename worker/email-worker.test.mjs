@@ -3,7 +3,9 @@ import { webcrypto } from "node:crypto";
 import fs from "node:fs/promises";
 import test from "node:test";
 
-globalThis.crypto = webcrypto;
+if (!globalThis.crypto) {
+  Object.defineProperty(globalThis, "crypto", { value: webcrypto });
+}
 
 globalThis.Response = class TestResponse {
   constructor(body, options = {}) {
@@ -16,7 +18,7 @@ globalThis.Response = class TestResponse {
 
 const source = await fs.readFile(new URL("./email-worker.js", import.meta.url), "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const { default: worker } = await import(moduleUrl);
+const { default: worker, email: receiveEmail } = await import(moduleUrl);
 
 class MemoryKV {
   constructor() { this.values = new Map(); }
@@ -100,6 +102,49 @@ test("deletes a saved mailbox", async () => {
   assert.equal(deleted.status, 200);
   const list = await request(env, "/mailboxes");
   assert.deepEqual(list.body.mailboxes, []);
+});
+
+test("preserves HTML content from multipart email", async () => {
+  const env = createEnv();
+  const encodedSubject = Buffer.from("Mã xác nhận", "utf8").toString("base64");
+  const raw = [
+    "From: sender@example.com",
+    "To: otp@hntdev.me",
+    `Subject: =?UTF-8?B?${encodedSubject}?=`,
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/alternative; boundary="test-boundary"',
+    "",
+    "--test-boundary",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    "Your code is 1234",
+    "--test-boundary",
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    '<html><body><h1>Your code</h1><strong style="color:red">1234</strong></body></html>',
+    "--test-boundary--",
+  ].join("\r\n");
+  const bytes = new TextEncoder().encode(raw);
+  let consumed = false;
+
+  await receiveEmail({
+    from: "sender@example.com",
+    to: "otp@hntdev.me",
+    raw: {
+      getReader: () => ({
+        read: async () => consumed ? { done: true } : (consumed = true, { done: false, value: bytes }),
+      }),
+    },
+  }, env, {});
+
+  const list = await request(env, "/emails?address=otp%40hntdev.me");
+  assert.equal(list.body.total, 1);
+  const detail = await request(env, `/emails/${list.body.emails[0].id}`);
+  assert.equal(detail.body.subject, "Mã xác nhận");
+  assert.equal(detail.body.body, "Your code is 1234");
+  assert.match(detail.body.html, /<strong style="color:red">1234<\/strong>/);
 });
 
 test("dashboard has valid JavaScript and unique element IDs", async () => {

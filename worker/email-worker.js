@@ -43,6 +43,7 @@ const LAST_NAMES = [
 export async function email(message, env, ctx) {
   try {
     const rawEmail = await streamToText(message.raw);
+    const content = extractEmailContent(rawEmail);
 
     // Trích domain từ địa chỉ nhận, ví dụ: "inbox@site2.com" → "site2.com"
     const toAddress = normalizeEmail(message.to || "");
@@ -53,9 +54,10 @@ export async function email(message, env, ctx) {
       from:    message.from,
       to:      toAddress,
       domain:  toDomain,                                        // ← multi-domain
-      subject: extractHeader(rawEmail, "Subject") || "(no subject)",
+      subject: decodeMimeHeader(extractHeader(rawEmail, "Subject")) || "(no subject)",
       date:    new Date().toISOString(),
-      body:    extractBody(rawEmail),
+      body:    content.text,
+      html:    content.html,
       read:    false,
     };
 
@@ -444,47 +446,88 @@ async function streamToText(stream) {
 }
 
 function extractHeader(raw, header) {
-  const match = raw.match(new RegExp(`^${header}: (.+)`, "im"));
+  const headerBlock = String(raw || "").split(/\r?\n\r?\n/, 1)[0].replace(/\r?\n[ \t]+/g, " ");
+  const escapedHeader = header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = headerBlock.match(new RegExp(`^${escapedHeader}:\\s*(.+)$`, "im"));
   return match ? match[1].trim() : null;
 }
 
-function extractBody(raw) {
-  const contentType = extractHeader(raw, "Content-Type") || "";
+function decodeMimeHeader(value) {
+  const joined = String(value || "").replace(/\?=\s+(?==\?)/g, "?=");
+  return joined.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi, (match, charset, encoding, encoded) => {
+    try {
+      let binary;
+      if (encoding.toLowerCase() === "b") {
+        binary = atob(encoded.replace(/\s+/g, ""));
+      } else {
+        binary = encoded
+          .replace(/_/g, " ")
+          .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      }
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      return new TextDecoder(charset).decode(bytes);
+    } catch {
+      return match;
+    }
+  });
+}
+
+function extractEmailContent(raw) {
+  const content = parseMimeEntity(raw);
+  const html = (content.html || "").trim().slice(0, 200000);
+  const text = (content.text || stripHtml(html) || "").trim().slice(0, 20000);
+  return { text, html };
+}
+
+function parseMimeEntity(raw) {
+  const separator = raw.search(/\r?\n\r?\n/);
+  if (separator < 0) return { text: raw, html: "" };
+
+  const separatorMatch = raw.slice(separator).match(/^\r?\n\r?\n/)[0];
+  const headers = raw.slice(0, separator).replace(/\r?\n[ \t]+/g, " ");
+  const body = raw.slice(separator + separatorMatch.length);
+  const contentType = extractHeader(headers, "Content-Type") || "text/plain";
+  const encoding = extractHeader(headers, "Content-Transfer-Encoding") || "";
   const boundaryMatch = contentType.match(/boundary="?([^";\r\n]+)"?/i);
 
   if (boundaryMatch) {
-    const boundary = boundaryMatch[1].trim();
-    const parts = raw.split(new RegExp(`--${escapeRegex(boundary)}(?:--)?`));
-    let plainText = "", htmlText = "";
-    for (const part of parts) {
-      if (!part.trim() || part.trim() === "--") continue;
-      const split = part.split(/\r?\n\r?\n/);
-      if (split.length < 2) continue;
-      const partHeaders = split[0];
-      const partBody    = split.slice(1).join("\n\n").trim();
-      const partType  = (partHeaders.match(/Content-Type:\s*([^\s;]+)/i) || [])[1] || "";
-      const encoding  = (partHeaders.match(/Content-Transfer-Encoding:\s*(\S+)/i) || [])[1] || "";
-      const decoded   = decodeContent(partBody, encoding);
-      if (partType.toLowerCase().includes("text/plain") && !plainText) plainText = decoded;
-      if (partType.toLowerCase().includes("text/html")  && !htmlText)  htmlText  = decoded;
+    const marker = `--${boundaryMatch[1].trim()}`;
+    const parts = body.split(marker).slice(1);
+    let text = "", html = "";
+    for (const rawPart of parts) {
+      const trimmed = rawPart.replace(/^\r?\n/, "").trim();
+      if (!trimmed || trimmed === "--" || trimmed.startsWith("--\r") || trimmed.startsWith("--\n")) continue;
+      const part = parseMimeEntity(trimmed.replace(/\r?\n--$/, ""));
+      if (!text && part.text) text = part.text;
+      if (!html && part.html) html = part.html;
     }
-    return (plainText || stripHtml(htmlText)).trim().slice(0, 5000);
+    return { text, html };
   }
 
-  const bodyParts = raw.split(/\r?\n\r?\n/);
-  if (bodyParts.length < 2) return raw.trim().slice(0, 5000);
-  const encoding = extractHeader(raw, "Content-Transfer-Encoding") || "";
-  const decoded  = decodeContent(bodyParts.slice(1).join("\n\n").trim(), encoding);
+  const decoded = decodeContent(body.trim(), encoding, contentType);
   return contentType.toLowerCase().includes("text/html")
-    ? stripHtml(decoded).trim().slice(0, 5000)
-    : decoded.trim().slice(0, 5000);
+    ? { text: "", html: decoded }
+    : { text: decoded, html: "" };
 }
 
-function decodeContent(text, encoding) {
+function decodeContent(text, encoding, contentType = "") {
   const enc = (encoding || "").toLowerCase().trim();
-  if (enc === "base64") { try { return atob(text.replace(/\s+/g, "")); } catch { return text; } }
+  const charset = (contentType.match(/charset="?([^";\s]+)"?/i) || [])[1] || "utf-8";
+  if (enc === "base64") {
+    try {
+      const binary = atob(text.replace(/\s+/g, ""));
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      return new TextDecoder(charset).decode(bytes);
+    } catch { return text; }
+  }
   if (enc === "quoted-printable") {
-    return text.replace(/=\r?\n/g, "").replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    try {
+      const binary = text
+        .replace(/=\r?\n/g, "")
+        .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      return new TextDecoder(charset).decode(bytes);
+    } catch { return text; }
   }
   return text;
 }
@@ -499,8 +542,4 @@ function stripHtml(html) {
     .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

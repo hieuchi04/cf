@@ -75,7 +75,7 @@
     .switch.on { background: var(--green); }
     .switch.on::after { transform: translateX(15px); }
 
-    .workspace { margin-top: 14px; min-height: 650px; display: grid; grid-template-columns: 245px 330px minmax(330px, 1fr) 285px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+    .workspace { margin-top: 14px; min-height: 650px; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(290px, 1.05fr) minmax(360px, 1.8fr) minmax(260px, .9fr); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
     .pane { min-width: 0; background: var(--surface); }
     .pane + .pane { border-left: 1px solid var(--border); }
     .pane-head { height: 57px; padding: 0 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; }
@@ -89,14 +89,15 @@
     input::placeholder { color: #686d82; }
     select { appearance: auto; }
 
-    .mailbox-list, .email-list { overflow-y: auto; height: 532px; scrollbar-width: thin; scrollbar-color: #34384a transparent; }
+    .mailbox-list, .email-list { overflow-x: hidden; overflow-y: auto; height: 532px; scrollbar-width: thin; scrollbar-color: #34384a transparent; }
     .mailbox-item { width: 100%; border: 0; border-bottom: 1px solid rgba(41,44,60,.75); background: transparent; text-align: left; padding: 12px 13px; cursor: pointer; display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 10px; }
     .mailbox-item:hover { background: rgba(255,255,255,.025); }
     .mailbox-item.active { background: rgba(130,84,246,.11); box-shadow: inset 2px 0 var(--purple); }
     .mailbox-avatar { width: 32px; height: 32px; border-radius: 6px; background: var(--surface-3); display: grid; place-items: center; color: var(--cyan); }
     .mailbox-avatar svg { width: 16px; }
-    .mailbox-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .mailbox-time { color: var(--muted); font-size: 11px; margin-top: 5px; }
+    .mailbox-copy { display: block; min-width: 0; overflow: hidden; }
+    .mailbox-name { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 650 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .mailbox-time { display: block; color: var(--muted); font-size: 11px; margin-top: 5px; }
     .count { min-width: 20px; height: 20px; border-radius: 10px; background: rgba(130,84,246,.18); color: #bfaaff; display: grid; place-items: center; font-size: 11px; }
 
     .email-tools { padding: 10px 11px; border-bottom: 1px solid var(--border); }
@@ -125,6 +126,8 @@
     .message-from { font-weight: 700; overflow-wrap: anywhere; }
     .message-to { color: var(--muted); margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
     .message-body { padding: 22px; color: #d0d5e3; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; }
+    .message-content { min-height: 520px; flex: 1; background: white; }
+    .message-frame { display: block; width: 100%; min-height: 620px; border: 0; background: white; color-scheme: light; }
 
     .tools-pane { padding: 16px; }
     .tools-pane h3 { margin: 0 0 16px; font-size: 14px; }
@@ -377,7 +380,7 @@
         $("mailbox-list").innerHTML = items.map((mailbox) => `
           <button class="mailbox-item ${mailbox.address === state.currentMailbox ? "active" : ""}" onclick="selectMailbox('${escapeJs(mailbox.address)}')">
             <span class="mailbox-avatar"><i data-lucide="at-sign"></i></span>
-            <span><span class="mailbox-name">${escapeHtml(mailbox.address)}</span><span class="mailbox-time">${formatDate(mailbox.createdAt)}</span></span>
+            <span class="mailbox-copy"><span class="mailbox-name" title="${escapeHtml(mailbox.address)}">${escapeHtml(mailbox.address)}</span><span class="mailbox-time">${formatDate(mailbox.createdAt)}</span></span>
             <span class="count">${mailbox.messageCount || 0}</span>
           </button>`).join("");
       }
@@ -413,7 +416,7 @@
       const query = $("email-search").value.trim().toLowerCase();
       const emails = state.emails.filter((email) => {
         const matchesFilter = state.filter !== "unread" || !email.read;
-        const text = `${email.from} ${email.subject} ${email.preview}`.toLowerCase();
+        const text = `${email.from} ${decodeMimeHeader(email.subject)} ${email.preview}`.toLowerCase();
         return matchesFilter && text.includes(query);
       });
       $("email-count").textContent = state.emails.length;
@@ -423,7 +426,7 @@
         $("email-list").innerHTML = emails.map((email) => `
           <button class="email-item ${email.read ? "" : "unread"} ${email.id === state.currentEmailId ? "active" : ""}" onclick="openEmail('${email.id}')">
             <span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span>
-            <span><span class="email-row"><span class="sender">${escapeHtml(email.from)}</span><span class="email-date">${formatRelative(email.date)}</span></span><span class="subject">${escapeHtml(email.subject || "(Không có tiêu đề)")}</span><span class="preview">${escapeHtml(email.preview || "")}</span></span>
+            <span><span class="email-row"><span class="sender">${escapeHtml(email.from)}</span><span class="email-date">${formatRelative(email.date)}</span></span><span class="subject">${escapeHtml(decodeMimeHeader(email.subject) || "(Không có tiêu đề)")}</span><span class="preview">${escapeHtml(email.preview || "")}</span></span>
           </button>`).join("");
       }
       icons();
@@ -443,10 +446,55 @@
       if (!email) {
         $("viewer").innerHTML = `<div class="viewer-empty empty"><div><span class="empty-icon"><i data-lucide="mail-open"></i></span><strong>Chọn một email</strong><span>Nội dung thư sẽ hiển thị tại đây</span></div></div>`;
       } else {
-        $("viewer").innerHTML = `<div class="message-head"><h2>${escapeHtml(email.subject || "(Không có tiêu đề)")}</h2><div class="message-meta"><span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span><div><div class="message-from">${escapeHtml(email.from)}</div><div class="message-to">Đến ${escapeHtml(email.to)}</div></div><button class="btn btn-icon btn-danger" onclick="deleteEmail('${email.id}')" title="Xóa email"><i data-lucide="trash-2"></i></button></div></div><div class="message-body" id="message-body"></div>`;
-        $("message-body").textContent = email.body || "(Email không có nội dung văn bản)";
+        $("viewer").innerHTML = `<div class="message-head"><h2>${escapeHtml(decodeMimeHeader(email.subject) || "(Không có tiêu đề)")}</h2><div class="message-meta"><span class="sender-avatar">${escapeHtml(senderInitial(email.from))}</span><div><div class="message-from">${escapeHtml(email.from)}</div><div class="message-to">Đến ${escapeHtml(email.to)}</div></div><button class="btn btn-icon btn-danger" onclick="deleteEmail('${email.id}')" title="Xóa email"><i data-lucide="trash-2"></i></button></div></div><div id="message-content"></div>`;
+        if (email.html) {
+          const frame = document.createElement("iframe");
+          frame.className = "message-frame";
+          frame.title = "Nội dung HTML của email";
+          frame.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
+          frame.setAttribute("referrerpolicy", "no-referrer");
+          frame.srcdoc = buildSafeEmailHtml(email.html);
+          $("message-content").className = "message-content";
+          $("message-content").appendChild(frame);
+        } else {
+          $("message-content").className = "message-body";
+          $("message-content").textContent = email.body || "(Email không có nội dung văn bản)";
+        }
       }
       icons();
+    }
+
+    function buildSafeEmailHtml(html) {
+      const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+      doc.querySelectorAll("script, iframe, object, embed, form, input, button, textarea, select, link, meta, base").forEach((element) => element.remove());
+
+      doc.querySelectorAll("*").forEach((element) => {
+        for (const attribute of Array.from(element.attributes)) {
+          const name = attribute.name.toLowerCase();
+          const value = attribute.value.trim();
+          if (name.startsWith("on") || ["srcdoc", "formaction", "poster", "background"].includes(name)) {
+            element.removeAttribute(attribute.name);
+          }
+          if ((name === "href" || name === "src") && /^\s*(javascript|vbscript):/i.test(value)) {
+            element.removeAttribute(attribute.name);
+          }
+        }
+
+        if (element.tagName === "IMG") {
+          const source = element.getAttribute("src") || "";
+          if (source && !/^(data:|cid:)/i.test(source)) {
+            element.removeAttribute("src");
+            element.setAttribute("alt", element.getAttribute("alt") || "Ảnh từ xa đã bị chặn");
+          }
+        }
+        if (element.tagName === "A") {
+          element.setAttribute("target", "_blank");
+          element.setAttribute("rel", "noopener noreferrer");
+        }
+      });
+
+      const styles = Array.from(doc.querySelectorAll("style"), (style) => style.outerHTML).join("");
+      return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:"><base target="_blank">${styles}<style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111}body{padding:20px;box-sizing:border-box}img{max-width:100%;height:auto}</style></head><body>${doc.body.innerHTML}</body></html>`;
     }
 
     async function createCustomMailbox() {
@@ -577,6 +625,24 @@
       clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.add("hidden"), 3200);
     }
     function senderInitial(from) { return String(from || "?").replace(/^.*</, "").charAt(0).toUpperCase() || "?"; }
+    function decodeMimeHeader(value) {
+      const joined = String(value || "").replace(/\?=\s+(?==\?)/g, "?=");
+      return joined.replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi, (match, charset, encoding, encoded) => {
+        try {
+          let bytes;
+          if (encoding.toLowerCase() === "b") {
+            const binary = atob(encoded.replace(/\s+/g, ""));
+            bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+          } else {
+            const binary = encoded.replace(/_/g, " ").replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+            bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+          }
+          return new TextDecoder(charset).decode(bytes);
+        } catch {
+          return match;
+        }
+      });
+    }
     function formatDate(value) { if (!value) return ""; return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value)); }
     function formatRelative(value) {
       const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
